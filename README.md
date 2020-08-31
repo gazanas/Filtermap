@@ -195,3 +195,5 @@ and page(1, 10) // First page with 10 results
 for example
 
 ```
+List<Book> books = (new BasicFilter(entityManager, Book.class)).filter(bookFilter).sort(SortOrder.DESCENDING, "title").page(1, 10).get();
+```
