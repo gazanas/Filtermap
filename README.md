@@ -63,10 +63,6 @@ And after the compilation
 ```
 @Repository
 public interface BookRepository extends JpaRepository<Book, Integer> {
-    default String hello() {
-        return "Hello";
-    }
-
     default List<Book> filterBooks(Map book, EntityManager entityManager, FilterMapSort sort, FilterMapPaginate paginate) {
         BasicFilter basicFilter = (new BasicFilter(Book.class, entityManager)).filter(book);
         basicFilter.sort(sort);
