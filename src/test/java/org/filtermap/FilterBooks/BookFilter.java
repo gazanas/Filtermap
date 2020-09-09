@@ -1,13 +1,11 @@
 package org.filtermap.FilterBooks;
 
-import org.filtermap.AbstractFilter;
-
 import java.util.HashMap;
 import java.util.List;
 import java.util.Arrays;
 import java.util.Map;
 
-public class BookFilter implements AbstractFilter {
+public class BookFilter {
 
     public List<String> title;
     public List<Integer> published;

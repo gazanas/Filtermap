@@ -18,6 +18,18 @@
 
   <dependencies>
     <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <version>2.11.2</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-data-jpa</artifactId>
+      <version>2.3.3.RELEASE</version>
+    </dependency>
+
+    <dependency>
       <groupId>javax.persistence</groupId>
       <artifactId>javax.persistence-api</artifactId>
       <version>2.2</version>
@@ -110,10 +122,27 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-compiler-plugin</artifactId>
+
         <configuration>
           <source>11</source>
           <target>11</target>
           <proc>none</proc>
+          <compilerArgs>
+              <arg>--add-exports</arg>
+              <arg>jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED</arg>
+
+            <arg>--add-exports</arg>
+            <arg>jdk.compiler/com.sun.tools.javac.code=ALL-UNNAMED</arg>
+
+            <arg>--add-exports</arg>
+            <arg>jdk.compiler/com.sun.tools.javac.processing=ALL-UNNAMED</arg>
+
+            <arg>--add-exports</arg>
+            <arg>jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED</arg>
+
+            <arg>--add-exports</arg>
+            <arg>jdk.compiler/com.sun.tools.javac.model=ALL-UNNAMED</arg>
+          </compilerArgs>
         </configuration>
       </plugin>
     </plugins>

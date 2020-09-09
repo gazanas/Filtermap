@@ -1,199 +1,105 @@
-### Still in developement
-
 ### FilterMap
 
-Java Annotation Processor for filtering data through JPA.
+A Java Annotation Processor for generating default repository methods to filter data.
 
 ### Usage
 
-#### @Filters
+#### @Filter
 
-Filters annotation is used in an entity object and defines
-the fields that can filter the results of a select operation on this entity.
+Filter annotation is used in a repository interface
 
-For example lets say we have an entity Book
+For example lets say we have a repository for a Book entity
 
 ```
-@Entity
-@Table(name = "books")
-@Filter(filters = {"title", "published"})
-public class Book {
+@Repository
+public interface BookRepository extends JpaRepository<Book, Integer> {
 
-    @Id
-    private Integer id;
-
-    private Integer published;
-
-    private String title;
-
-    @OneToOne(cascade = CascadeType.ALL)
-    @JoinColumn(name = "publisher_id")
-    private Publisher publisher;
-
-    public Integer getId() {
-        return id;
-    }
-
-    public void setId(Integer id) {
-        this.id = id;
-    }
-
-    public Integer getPublished() {
-        return published;
-    }
-
-    public void setPublished(Integer published) {
-        this.published = published;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public void setTitle(String title) {
-        this.title = title;
-    }
-
-    public Publisher getPublisher() {
-        return publisher;
-    }
-
-    public void setPublisher(Publisher publisher) {
-        this.publisher = publisher;
-    }
+    @Filter
+    List<Book> filterBooks(Map book,
+                           EntityManager entityManager);
 }
 ```
 
-now the results of a select on the Book entity can be
-filtered by the title and published field.
+Since FilterMap makes use of Criteria API, the EntityManager should be passed as
+an argument in the method.
 
-The annotation processor will create a pojo containing the necessary
-information for the example above will look something like this
+FilterMap will generate the default implementation for this method during the compilation.
 
 ```
-public class BookFilter implements AbstractFilter {
-
-    public List<String> title;
-    public List<Integer> published;
-    public List<String> publisherName;
-
-    public HashMap<String, HashMap> filterMap = new HashMap();
-
-    public List<String> getTitle() {
-        return this.title;
-    }
-
-    public void setTitle(List<String> title) {
-        this.title = title;
-
-        filterMap.put("title", new HashMap() {{
-            put("value", title);
-            put("filter", Arrays.asList(new String[]{"title"}));
-            put("type", Arrays.asList(new Class[]{String.class}));
-        }});
-    }
-
-    public List<Integer> getPublished() {
-        return this.published;
-    }
-
-    public void setPublished(List<Integer> published) {
-        this.published = published;
-
-        filterMap.put("published", new HashMap() {{
-            put("value", published);
-            put("filter", Arrays.asList(new String[]{"published"}));
-            put("type", Arrays.asList(new Class[]{Integer.class}));
-        }});
-    }
-
-    public Map getFilterMap() {
-        return filterMap;
+@Repository
+public interface BookRepository extends JpaRepository<Book, Integer> {
+    default List<Book> filterBooks(Map book, EntityManager entityManager) {
+        BasicFilter basicFilter = (new BasicFilter(Book.class, entityManager)).filter(book);
+        return basicFilter.get();
     }
 }
 ```
 
 ### BasicFilter
 
-Filtermap also offers a service to filter the data.
-When the filter object above is created we can use it like so
+The BasicFilter object created in the method is generated automatically by FilterMap
+and contains the filtering logic using the Criteria API.
+
+### Sorting And Paginating
+
+FilterMap also permits the sorting and paginating of the results.
 
 ```
-List<Book> books = (new BasicFilter(entityManager, Book.class)).filter(bookFilter).get();
+@Repository
+public interface BookRepository extends JpaRepository<Book, Integer> {
+
+    @Filter
+    List<Book> filterBooks(Map book,
+                           EntityManager entityManager,
+                           FilterMapSort sort,
+                           FilterMapPaginate paginate);
+}
 ```
 
-In its constructor we inject the EntityManager, and the entity class,
-and on the filter we pass the filter object.
-
-### Filter By Child Attributes
-
-Filtermap will also filter data by a child entitys field
-
-for example
+And after the compilation
 
 ```
-@Entity
-@Table(name = "books")
-@Filter(filters = {"title", "published", "publisher.publisherName"})
-public class Book {
-
-    @Id
-    private Integer id;
-
-    private Integer published;
-
-    private String title;
-
-    @OneToOne(cascade = CascadeType.ALL)
-    @JoinColumn(name = "publisher_id")
-    private Publisher publisher;
-
-    public Integer getId() {
-        return id;
+@Repository
+public interface BookRepository extends JpaRepository<Book, Integer> {
+    default String hello() {
+        return "Hello";
     }
 
-    public void setId(Integer id) {
-        this.id = id;
-    }
-
-    public Integer getPublished() {
-        return published;
-    }
-
-    public void setPublished(Integer published) {
-        this.published = published;
-    }
-
-    public String getTitle() {
-        return title;
-    }
-
-    public void setTitle(String title) {
-        this.title = title;
-    }
-
-    public Publisher getPublisher() {
-        return publisher;
-    }
-
-    public void setPublisher(Publisher publisher) {
-        this.publisher = publisher;
+    default List<Book> filterBooks(Map book, EntityManager entityManager, FilterMapSort sort, FilterMapPaginate paginate) {
+        BasicFilter basicFilter = (new BasicFilter(Book.class, entityManager)).filter(book);
+        basicFilter.sort(sort);
+        basicFilter.page(paginate);
+        return basicFilter.get();
     }
 }
 ```
 
-Now we can filter books by the publishers name even though it belongs to a child entity.
+FilterMapSort and FilterMapPaginate are placeholders for the values for sort and paginate
 
-### Getting, Ordering and Paginating Data
+If FilterMapSort is omitted then it will only paginate the results.
 
-To get the resulted data we only need to call get() after filter()
+If FilterMapPaginate is omitted then it will only sort the results.
 
-But we can also sort and paginate the data if before get we call
-sort(SortOrder.DESCENDING, "title")
-and page(1, 10) // First page with 10 results
+### Calling FilterMap
 
-for example
+A simple call to FilterMap would be:
 
 ```
-List<Book> books = (new BasicFilter(entityManager, Book.class)).filter(bookFilter).sort(SortOrder.DESCENDING, "title").page(1, 10).get();
+Map<String, List> book = new HashMap() { put("title", new ArrayList<String>() { add("At the mountains of madness"); add("Foundation"); }) };
+return bookRepository.filterBooks(book,
+                entityManager,
+                FilterMapSort.instance(SortOrder.DESCENDING,  "published", "title"),
+                FilterMapPaginate.instance(1, 1));
 ```
+
+If you use SpringFramework and want to deserialize your request parameters in *Map<String, List>* you should
+use *MultiValueMap* in as your controller parameter.
+
+
+#### On Going
+
+- Better Error Handling
+
+- Testing the processor
+
+- Documenting the processor

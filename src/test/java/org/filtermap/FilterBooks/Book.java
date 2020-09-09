@@ -6,7 +6,6 @@ import javax.persistence.*;
 
 @Entity
 @Table(name = "books")
-@Filter(filters = {"title", "published", "publisher.publisherName"})
 public class Book {
 
     @Id
