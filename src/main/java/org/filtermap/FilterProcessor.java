@@ -172,7 +172,7 @@ public class FilterProcessor extends AbstractProcessor {
             BufferedWriter bufferedWriter = new BufferedWriter(file.openWriter());
 
             bufferedWriter.write("/*\n" +
-                    " *      Creates a DAO containing the appropriate information for filtering database results.\n" +
+                    " *      Creates a the logic for filtering database results.\n" +
                     " *      Copyright (C) 2020  Anastasios Gaziotis\n" +
                     " *\n" +
                     " *      This program is free software: you can redistribute it and/or modify\n" +
