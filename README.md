@@ -93,6 +93,10 @@ return bookRepository.filterBooks(book,
 If you use SpringFramework and want to deserialize your request parameters in *Map<String, List>* you should
 use *MultiValueMap* in as your controller parameter.
 
+### Demo Application
+
+The functionality of FilterMap can be displayed in [this simple application](https://github.com/gazanas/FilterMapDemo-Spring)
+
 
 #### On Going
 
