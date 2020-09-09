@@ -40,6 +40,8 @@ public interface BookRepository extends JpaRepository<Book, Integer> {
 The BasicFilter object created in the method is generated automatically by FilterMap
 and contains the filtering logic using the Criteria API.
 
+The resulted query will be something like: *WHERE title IN (title1, title2) OR published IN (date1, date2)*
+
 ### Sorting And Paginating
 
 FilterMap also permits the sorting and paginating of the results.
