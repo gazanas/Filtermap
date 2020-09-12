@@ -20,7 +20,7 @@ public interface BookRepository extends JpaRepository<Book, Integer> {
 ```
 
 Since FilterMap makes use of Criteria API, the EntityManager should be present in the repository
-that why filtermap generates the EntityManagerAccess interface and its implementation which provides
+that's why filtermap generates the EntityManagerAccess interface and its implementation which provides
 the EntityManager object.
 
 FilterMap will generate the default implementation for this method during the compilation.
