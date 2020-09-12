@@ -15,21 +15,21 @@ For example lets say we have a repository for a Book entity
 public interface BookRepository extends JpaRepository<Book, Integer> {
 
     @Filter
-    List<Book> filterBooks(Map book,
-                           EntityManager entityManager);
+    List<Book> filterBooks(Map book);
 }
 ```
 
-Since FilterMap makes use of Criteria API, the EntityManager should be passed as
-an argument in the method.
+Since FilterMap makes use of Criteria API, the EntityManager should be present in the repository
+that why filtermap generates the EntityManagerAccess interface and its implementation which provides
+the EntityManager object.
 
 FilterMap will generate the default implementation for this method during the compilation.
 
 ```
 @Repository
-public interface BookRepository extends JpaRepository<Book, Integer> {
-    default List<Book> filterBooks(Map book, EntityManager entityManager) {
-        BasicFilter basicFilter = (new BasicFilter(Book.class, entityManager)).filter(book);
+public interface BookRepository extends JpaRepository<Book, Integer>, EntityManagerAccess {
+    default List<Book> filterBooks(Map book) {
+        BasicFilter basicFilter = (new BasicFilter(Book.class, this.accessEntityManager())).filter(book);
         return basicFilter.get();
     }
 }
@@ -46,11 +46,10 @@ FilterMap also permits the sorting and paginating of the results.
 
 ```
 @Repository
-public interface BookRepository extends JpaRepository<Book, Integer> {
+public interface BookRepository extends JpaRepository<Book, Integer>{
 
     @Filter
     List<Book> filterBooks(Map book,
-                           EntityManager entityManager,
                            FilterMapSort sort,
                            FilterMapPaginate paginate);
 }
@@ -60,13 +59,10 @@ And after the compilation
 
 ```
 @Repository
-public interface BookRepository extends JpaRepository<Book, Integer> {
-    default String hello() {
-        return "Hello";
-    }
+public interface BookRepository extends JpaRepository<Book, Integer>, EntityManagerAccess {
 
-    default List<Book> filterBooks(Map book, EntityManager entityManager, FilterMapSort sort, FilterMapPaginate paginate) {
-        BasicFilter basicFilter = (new BasicFilter(Book.class, entityManager)).filter(book);
+    default List<Book> filterBooks(Map book, FilterMapSort sort, FilterMapPaginate paginate) {
+        BasicFilter basicFilter = (new BasicFilter(Book.class, this.accessEntityManager())).filter(book);
         basicFilter.sort(sort);
         basicFilter.page(paginate);
         return basicFilter.get();
@@ -87,7 +83,6 @@ A simple call to FilterMap would be:
 ```
 Map<String, List> book = new HashMap() { put("title", new ArrayList<String>() { add("At the mountains of madness"); add("Foundation"); }) };
 return bookRepository.filterBooks(book,
-                entityManager,
                 FilterMapSort.instance(SortOrder.DESCENDING,  "published", "title"),
                 FilterMapPaginate.instance(1, 1));
 ```

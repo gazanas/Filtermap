@@ -2,6 +2,8 @@ package org.filtermap;
 
 import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.CompilationUnitTree;
+import com.sun.source.tree.StatementTree;
+import com.sun.source.tree.Tree;
 import com.sun.source.util.TreePath;
 import com.sun.source.util.TreePathScanner;
 import com.sun.source.util.Trees;
@@ -21,6 +23,7 @@ import org.springframework.stereotype.Repository;
 import javax.annotation.processing.*;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.*;
+import javax.tools.Diagnostic;
 import javax.tools.JavaFileObject;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -41,6 +44,8 @@ public class FilterProcessor extends AbstractProcessor {
     JavacProcessingEnvironment javacProcessingEnvironment;
 
     Context context;
+
+    PackageElement packageElement = null;
 
     @Override
     public synchronized void init(ProcessingEnvironment processingEnv) {
@@ -83,12 +88,27 @@ public class FilterProcessor extends AbstractProcessor {
                                         ExecutableElement methodElement = (ExecutableElement) classElement.getEnclosedElements().stream().filter(e -> e.getKind() == ElementKind.METHOD && (e.getSimpleName()).equals((tree.name))).findFirst().get();
                                         if (methodElement.getAnnotation(Filter.class) == null) return;
 
+                                        String entityManagerAccessClassName = compilationUnit.getPackageName().toString()+".EntityManagerAccess";
+                                        String[] entityManagerAccessStrings = entityManagerAccessClassName.split("\\.");
+                                        JCTree.JCExpression entityManagerAccessClassNameIdent = treeMaker.Ident(getName(entityManagerAccessStrings[0]));
+                                        for (int i = 1; i < entityManagerAccessStrings.length; i++) {
+                                            entityManagerAccessClassNameIdent = treeMaker.Select(entityManagerAccessClassNameIdent, getName(entityManagerAccessStrings[i]));
+                                        }
+
+                                        JCTree.JCClassDecl classDecl = (JCTree.JCClassDecl) classTree;
+                                        classDecl.implementing = classDecl.implementing.appendList(List.<JCTree.JCExpression>of(entityManagerAccessClassNameIdent));
+
                                         Map<String, Integer> parameterPositions = new HashMap();
                                         int position = 0;
                                         for (VariableElement p : methodElement.getParameters()) {
                                             parameterPositions.put(p.asType().toString(), position);
                                             position++;
                                         }
+
+                                        JCTree.JCIdent getEntityManager = treeMaker.Ident(getName("accessEntityManager"));
+                                        JCTree.JCMethodInvocation getEntityManagerInvocation =
+                                                treeMaker.Apply(List.<JCTree.JCExpression>nil(), getEntityManager, List.<JCTree.JCExpression>nil());
+                                        JCTree.JCExpressionStatement execGetEntityManager = treeMaker.Exec(getEntityManagerInvocation);
 
                                         ArrayList<JCTree.JCStatement> statementsList = new ArrayList<>();
 
@@ -100,7 +120,7 @@ public class FilterProcessor extends AbstractProcessor {
                                         }
                                         JCTree.JCNewClass classObj = treeMaker.NewClass(null, List.<JCTree.JCExpression>nil(), classNameIdent,
                                                 List.<JCTree.JCExpression>of(treeMaker.ClassLiteral(tree.restype.type.getTypeArguments().get(0)),
-                                                        treeMaker.Ident(tree.params.get(parameterPositions.get("javax.persistence.EntityManager")).name)), null);
+                                                        execGetEntityManager.expr), null);
 
                                         JCTree.JCFieldAccess readValue = treeMaker.Select(classObj, getName("filter"));
                                         JCTree.JCMethodInvocation filterInvocation =
@@ -149,11 +169,16 @@ public class FilterProcessor extends AbstractProcessor {
                 };
 
         boolean filterCreated = false;
+        boolean entityManagerAccessCreated = false;
 
         for(final Element element: roundEnv.getElementsAnnotatedWith(Repository.class)) {
 
             if (filterCreated == false)
                     filterCreated = createFilter(element);
+
+            if (entityManagerAccessCreated == false)
+                entityManagerAccessCreated = createEntityManagerAccessInterface(element);
+
 
             final TreePath path = trees.getPath(element);
             scanner.scan(path, path.getCompilationUnit());
@@ -161,6 +186,88 @@ public class FilterProcessor extends AbstractProcessor {
 
         return false;
 
+    }
+
+    private boolean createEntityManagerAccessInterface(Element element) {
+        packageElement = (PackageElement) element.getEnclosingElement();
+        JavaFileObject file = null;
+
+        JavaFileObject fileImpl = null;
+        try {
+
+            file = filer.createSourceFile(packageElement.getQualifiedName() +".EntityManagerAccess");
+            BufferedWriter bufferedWriter = new BufferedWriter(file.openWriter());
+
+            bufferedWriter.write("/*\n" +
+                    " *      Creates an interface for accessing the entity manager.\n" +
+                    " *      Copyright (C) 2020  Anastasios Gaziotis\n" +
+                    " *\n" +
+                    " *      This program is free software: you can redistribute it and/or modify\n" +
+                    " *      it under the terms of the GNU General Public License as published by\n" +
+                    " *      the Free Software Foundation, either version 3 of the License, or\n" +
+                    " *      (at your option) any later version.\n" +
+                    " *\n" +
+                    " *      This program is distributed in the hope that it will be useful,\n" +
+                    " *      but WITHOUT ANY WARRANTY; without even the implied warranty of\n" +
+                    " *      MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\n" +
+                    " *      GNU General Public License for more details.\n" +
+                    " *\n" +
+                    " *      You should have received a copy of the GNU General Public License\n" +
+                    " *      along with this program.  If not, see <https://www.gnu.org/licenses/>.\n" +
+                    "*/\n" +
+                    "package "+packageElement.getQualifiedName()+";\n" +
+                    "\n" +
+                    "import javax.persistence.*;\n" +
+                    "\n" +
+                    "public interface EntityManagerAccess {\n" +
+                    "\n" +
+                    "    public EntityManager accessEntityManager();\n" +
+                    "}");
+
+            bufferedWriter.close();
+
+            file = filer.createSourceFile(packageElement.getQualifiedName() +".EntityManagerAccessImpl");
+            bufferedWriter = new BufferedWriter(file.openWriter());
+
+            bufferedWriter.write("/*\n" +
+                    " *      Creates an interface for accessing the entity manager.\n" +
+                    " *      Copyright (C) 2020  Anastasios Gaziotis\n" +
+                    " *\n" +
+                    " *      This program is free software: you can redistribute it and/or modify\n" +
+                    " *      it under the terms of the GNU General Public License as published by\n" +
+                    " *      the Free Software Foundation, either version 3 of the License, or\n" +
+                    " *      (at your option) any later version.\n" +
+                    " *\n" +
+                    " *      This program is distributed in the hope that it will be useful,\n" +
+                    " *      but WITHOUT ANY WARRANTY; without even the implied warranty of\n" +
+                    " *      MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\n" +
+                    " *      GNU General Public License for more details.\n" +
+                    " *\n" +
+                    " *      You should have received a copy of the GNU General Public License\n" +
+                    " *      along with this program.  If not, see <https://www.gnu.org/licenses/>.\n" +
+                    "*/\n" +
+                    "package "+packageElement.getQualifiedName()+";\n" +
+                    "\n" +
+                    "import javax.persistence.*;\n" +
+                    "\n" +
+                    "public class EntityManagerAccessImpl implements EntityManagerAccess {\n" +
+                    "\n" +
+                    "   @PersistenceContext\n" +
+                    "   private EntityManager em;\n" +
+                    "\n" +
+                    "   public EntityManager accessEntityManager() {\n" +
+                    "       return em;\n" +
+                    "   }\n" +
+                    "}");
+
+            bufferedWriter.close();
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
+
+        return true;
     }
 
     private boolean createFilter(Element element) {
