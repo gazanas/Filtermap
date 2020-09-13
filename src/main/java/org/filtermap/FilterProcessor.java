@@ -1,9 +1,27 @@
+/*
+ *      Generates EntityManagerAccess Interface and implementation
+ *      Generates BasicFilter class
+ *      Modifies repository compilation process adding filtering method
+ *      Copyright (C) 2020  Anastasios Gaziotis
+ *
+ *      This program is free software: you can redistribute it and/or modify
+ *      it under the terms of the GNU General Public License as published by
+ *      the Free Software Foundation, either version 3 of the License, or
+ *      (at your option) any later version.
+ *
+ *      This program is distributed in the hope that it will be useful,
+ *      but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *      MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *      GNU General Public License for more details.
+ *
+ *      You should have received a copy of the GNU General Public License
+ *      along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package org.filtermap;
 
 import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.CompilationUnitTree;
-import com.sun.source.tree.StatementTree;
-import com.sun.source.tree.Tree;
 import com.sun.source.util.TreePath;
 import com.sun.source.util.TreePathScanner;
 import com.sun.source.util.Trees;
@@ -18,7 +36,6 @@ import com.sun.tools.javac.util.List;
 import com.sun.tools.javac.util.Name;
 import com.sun.tools.javac.util.Names;
 import org.filtermap.annotations.Filter;
-import org.springframework.stereotype.Repository;
 
 import javax.annotation.processing.*;
 import javax.lang.model.SourceVersion;
@@ -35,7 +52,6 @@ import java.util.Set;
 @SupportedAnnotationTypes({"org.filtermap.annotations.Filter"})
 public class FilterProcessor extends AbstractProcessor {
 
-    private static final Class ANNOTATION = Repository.class;
 
     Filer filer;
 
@@ -96,7 +112,14 @@ public class FilterProcessor extends AbstractProcessor {
                                         }
 
                                         JCTree.JCClassDecl classDecl = (JCTree.JCClassDecl) classTree;
-                                        classDecl.implementing = classDecl.implementing.appendList(List.<JCTree.JCExpression>of(entityManagerAccessClassNameIdent));
+                                        boolean implemented = false;
+                                        for (JCTree.JCExpression implementedInterface : classDecl.implementing)
+                                            if (implementedInterface.toString().equals(entityManagerAccessClassNameIdent.toString()))
+                                                implemented = true;
+
+                                        processingEnv.getMessager().printMessage(Diagnostic.Kind.MANDATORY_WARNING, Boolean.toString(implemented));
+                                        if (!implemented)
+                                            classDecl.implementing = classDecl.implementing.appendList(List.<JCTree.JCExpression>of(entityManagerAccessClassNameIdent));
 
                                         Map<String, Integer> parameterPositions = new HashMap();
                                         int position = 0;
@@ -171,17 +194,20 @@ public class FilterProcessor extends AbstractProcessor {
         boolean filterCreated = false;
         boolean entityManagerAccessCreated = false;
 
-        for(final Element element: roundEnv.getElementsAnnotatedWith(Repository.class)) {
+        for(final Element element: roundEnv.getElementsAnnotatedWith(Filter.class)) {
+
+            Element enclosingElement = element.getEnclosingElement();
 
             if (filterCreated == false)
-                    filterCreated = createFilter(element);
+                    filterCreated = createFilter(enclosingElement);
 
             if (entityManagerAccessCreated == false)
-                entityManagerAccessCreated = createEntityManagerAccessInterface(element);
+                entityManagerAccessCreated = createEntityManagerAccessInterface(enclosingElement);
 
 
-            final TreePath path = trees.getPath(element);
+            final TreePath path = trees.getPath(enclosingElement);
             scanner.scan(path, path.getCompilationUnit());
+            continue;
         }
 
         return false;
@@ -297,11 +323,8 @@ public class FilterProcessor extends AbstractProcessor {
                     "*/\n" +
                     "package "+packageElement.getQualifiedName()+";\n" +
                     "\n" +
-                    "import com.fasterxml.jackson.databind.ObjectMapper;\n" +
-                    "\n" +
                     "import javax.persistence.*;\n" +
                     "import javax.persistence.criteria.*;\n" +
-                    "import javax.persistence.metamodel.Metamodel;\n" +
                     "import java.util.*;\n" +
                     "import javax.swing.*;\n" +
                     "import org.filtermap.FilterMapSort;\n" +

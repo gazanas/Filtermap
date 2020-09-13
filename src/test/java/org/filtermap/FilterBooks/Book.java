@@ -1,7 +1,5 @@
 package org.filtermap.FilterBooks;
 
-import org.filtermap.annotations.Filter;
-
 import javax.persistence.*;
 
 @Entity
@@ -14,10 +12,6 @@ public class Book {
     private Integer published;
 
     private String title;
-
-    @OneToOne(cascade = CascadeType.ALL)
-    @JoinColumn(name = "publisher_id")
-    private Publisher publisher;
 
     public Integer getId() {
         return id;
@@ -41,13 +35,5 @@ public class Book {
 
     public void setTitle(String title) {
         this.title = title;
-    }
-
-    public Publisher getPublisher() {
-        return publisher;
-    }
-
-    public void setPublisher(Publisher publisher) {
-        this.publisher = publisher;
     }
 }
