@@ -25,6 +25,8 @@ the EntityManager object.
 
 FilterMap will generate the default implementation for this method during the compilation.
 
+The resulted query will be something like: *WHERE title IN ("title1", "title2") OR published IN ("date1", "date2")*
+
 ```
 @Repository
 public interface BookRepository extends JpaRepository<Book, Integer>, EntityManagerAccess {
