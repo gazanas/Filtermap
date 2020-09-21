@@ -48,6 +48,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @SupportedAnnotationTypes({"org.filtermap.annotations.Filter"})
 public class FilterProcessor extends AbstractProcessor {
@@ -104,6 +105,9 @@ public class FilterProcessor extends AbstractProcessor {
                                         ExecutableElement methodElement = (ExecutableElement) classElement.getEnclosedElements().stream().filter(e -> e.getKind() == ElementKind.METHOD && (e.getSimpleName()).equals((tree.name))).findFirst().get();
                                         if (methodElement.getAnnotation(Filter.class) == null) return;
 
+                                        /**
+                                         * Get the EntityManagerAccess interface.
+                                         */
                                         String entityManagerAccessClassName = compilationUnit.getPackageName().toString()+".EntityManagerAccess";
                                         String[] entityManagerAccessStrings = entityManagerAccessClassName.split("\\.");
                                         JCTree.JCExpression entityManagerAccessClassNameIdent = treeMaker.Ident(getName(entityManagerAccessStrings[0]));
@@ -111,6 +115,10 @@ public class FilterProcessor extends AbstractProcessor {
                                             entityManagerAccessClassNameIdent = treeMaker.Select(entityManagerAccessClassNameIdent, getName(entityManagerAccessStrings[i]));
                                         }
 
+                                        /**
+                                         * If the processed interface doesn't already implement the EntityManagerAccess
+                                         * interface then implement it.
+                                         */
                                         JCTree.JCClassDecl classDecl = (JCTree.JCClassDecl) classTree;
                                         boolean implemented = false;
                                         for (JCTree.JCExpression implementedInterface : classDecl.implementing)
@@ -120,6 +128,12 @@ public class FilterProcessor extends AbstractProcessor {
                                         if (!implemented)
                                             classDecl.implementing = classDecl.implementing.appendList(List.<JCTree.JCExpression>of(entityManagerAccessClassNameIdent));
 
+
+                                        /**
+                                         * Get a map of the types of the methods parameters and their respective positions
+                                         * in the methods signature. This is used to find which parameter will be sent
+                                         * in each method call of the BasicFilter object.
+                                         */
                                         Map<String, Integer> parameterPositions = new HashMap();
                                         int position = 0;
                                         for (VariableElement p : methodElement.getParameters()) {
@@ -127,30 +141,50 @@ public class FilterProcessor extends AbstractProcessor {
                                             position++;
                                         }
 
+                                        ArrayList<JCTree.JCStatement> statementsList = new ArrayList<>();
+
+                                        /**
+                                         * Create the invocation of accessEntityManager method from the EntityManagerAccess
+                                         * interface. This will create 'accessEntityManager()' call in the ast.
+                                         */
                                         JCTree.JCIdent getEntityManager = treeMaker.Ident(getName("accessEntityManager"));
                                         JCTree.JCMethodInvocation getEntityManagerInvocation =
                                                 treeMaker.Apply(List.<JCTree.JCExpression>nil(), getEntityManager, List.<JCTree.JCExpression>nil());
                                         JCTree.JCExpressionStatement execGetEntityManager = treeMaker.Exec(getEntityManagerInvocation);
 
-                                        ArrayList<JCTree.JCStatement> statementsList = new ArrayList<>();
-
+                                        /**
+                                         * Get the BasicFilter class.
+                                         */
                                         String className = compilationUnit.getPackageName().toString()+".BasicFilter";
                                         String[] strings = className.split("\\.");
                                         JCTree.JCExpression classNameIdent = treeMaker.Ident(getName(strings[0]));
                                         for (int i = 1; i < strings.length; i++) {
                                             classNameIdent = treeMaker.Select(classNameIdent, getName(strings[i]));
                                         }
+
+                                        /**
+                                         * Create a new object of the BasicFilter class. This will create the
+                                         * 'new BasicFilter()' statement in the ast.
+                                         */
                                         JCTree.JCNewClass classObj = treeMaker.NewClass(null, List.<JCTree.JCExpression>nil(), classNameIdent,
                                                 List.<JCTree.JCExpression>of(treeMaker.ClassLiteral(tree.restype.type.getTypeArguments().get(0)),
                                                         execGetEntityManager.expr), null);
 
-                                        JCTree.JCFieldAccess readValue = treeMaker.Select(classObj, getName("filter"));
+                                        /**
+                                         * Create the invocation of filter method from the BasicFilte object
+                                         * This will create 'filter(map)' call in the ast.
+                                         */
+                                        JCTree.JCFieldAccess filter = treeMaker.Select(classObj, getName("filter"));
                                         JCTree.JCMethodInvocation filterInvocation =
-                                                treeMaker.Apply(List.<JCTree.JCExpression>nil(), readValue, List.<JCTree.JCExpression>of(treeMaker.Ident(tree.params.get(parameterPositions.get("java.util.Map")).name)));
+                                                treeMaker.Apply(List.<JCTree.JCExpression>nil(), filter, List.<JCTree.JCExpression>of(treeMaker.Ident(tree.params.get(parameterPositions.get("java.util.Map")).name)));
                                         JCTree.JCExpression execFilter = treeMaker.Exec(filterInvocation).getExpression();
                                         JCTree.JCVariableDecl variableDecl = treeMaker.VarDef(new Symbol.VarSymbol(0, getName("basicFilter"), classNameIdent.type, tree.sym), execFilter);
                                         statementsList.add(variableDecl);
 
+                                        /**
+                                         * If a parameter of type FilterMapSort is present in the methods signature
+                                         * then create an invocation to the sort method of the BasicFilter object.
+                                         */
                                         if(parameterPositions.get("org.filtermap.FilterMapSort") != null && tree.params.get(parameterPositions.get("org.filtermap.FilterMapSort")).vartype.toString().equals("FilterMapSort")) {
                                             JCTree.JCFieldAccess sort = treeMaker.Select(treeMaker.Ident(getName("basicFilter")), getName("sort"));
                                             JCTree.JCMethodInvocation sortInvocation =
@@ -159,6 +193,10 @@ public class FilterProcessor extends AbstractProcessor {
                                             statementsList.add(execSort);
                                         }
 
+                                        /**
+                                         * If a parameter of type FilterMapPaginate is present in the methods signature
+                                         * then create an invocation to the page method of the BasicFilter object.
+                                         */
                                         if(parameterPositions.get("org.filtermap.FilterMapPaginate") != null && tree.params.get(parameterPositions.get("org.filtermap.FilterMapPaginate")).vartype.toString().equals("FilterMapPaginate")) {
                                             JCTree.JCFieldAccess paginate = treeMaker.Select(treeMaker.Ident(getName("basicFilter")), getName("page"));
                                             JCTree.JCMethodInvocation pageInvocation =
@@ -167,12 +205,19 @@ public class FilterProcessor extends AbstractProcessor {
                                             statementsList.add(execPage);
                                         }
 
+                                        /**
+                                         * Create the invocation of the get method on the BasicFilter object, this will
+                                         * return the list of the filtered results.
+                                         */
                                         JCTree.JCFieldAccess get = treeMaker.Select(treeMaker.Ident(getName("basicFilter")), getName("get"));
                                         JCTree.JCMethodInvocation getInvocation =
                                                 treeMaker.Apply(List.<JCTree.JCExpression>nil(), get, List.<JCTree.JCExpression>nil());
                                         JCTree.JCExpressionStatement execGet = treeMaker.Exec(getInvocation);
 
 
+                                        /**
+                                         * Creates the return statement
+                                         */
                                         JCTree.JCReturn returnStatement = treeMaker.Return(execGet.expr);
                                         statementsList.add(returnStatement);
 
@@ -192,32 +237,75 @@ public class FilterProcessor extends AbstractProcessor {
 
         boolean filterCreated = false;
         boolean entityManagerAccessCreated = false;
+        boolean errors = false;
 
         for(final Element element: roundEnv.getElementsAnnotatedWith(Filter.class)) {
 
+            // The method to generate already has default implementation
+            if (element.getModifiers().contains(Modifier.DEFAULT)) {
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, "Method " + element.getSimpleName() + " can not have default implementation.");
+                errors = true;
+            }
+
+            // The method to generate must have a map, that contains the filter values, as parameter
+            if (!filterParameterExists((ExecutableElement) element)) {
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, "Filter method "+element.getSimpleName()+" must have a map as parameter.");
+                errors = true;
+            }
+
+            // The method can not have multiple maps since it will only filter data by one map
+            if (!isSingleFilterParameter((ExecutableElement) element)) {
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, "Filter method "+element.getSimpleName()+" can not have multiple maps as parameters.");
+                errors = true;
+            }
+
             Element enclosingElement = element.getEnclosingElement();
 
-            if (filterCreated == false)
-                    filterCreated = createFilter(enclosingElement);
+            if (enclosingElement.getKind() != ElementKind.INTERFACE) {
+                processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, enclosingElement.getSimpleName() + " must be an interface.");
+                errors = true;
+            }
 
-            if (entityManagerAccessCreated == false)
-                entityManagerAccessCreated = createEntityManagerAccessInterface(enclosingElement);
+            if (!errors) {
+
+                // Create BasicFilter only once
+                if (filterCreated == false)
+                        filterCreated = createFilter(enclosingElement);
+
+                // Create entity manager access interface and implementation only once
+                if (entityManagerAccessCreated == false)
+                    entityManagerAccessCreated = createEntityManagerAccessInterface(enclosingElement);
 
 
-            final TreePath path = trees.getPath(enclosingElement);
-            scanner.scan(path, path.getCompilationUnit());
-            continue;
+                final TreePath path = trees.getPath(enclosingElement);
+                scanner.scan(path, path.getCompilationUnit());
+            } else {
+                break;
+            }
         }
 
-        return false;
+        return errors;
 
+    }
+
+    private boolean filterParameterExists(ExecutableElement element) {
+        boolean filterParameterExists;
+        filterParameterExists = element.getParameters().stream().anyMatch(e -> e.asType().toString().equals("java.util.Map"));
+
+        return filterParameterExists;
+    }
+
+    private boolean isSingleFilterParameter(ExecutableElement element) {
+        boolean onlyOneMap;
+        onlyOneMap = element.getParameters().stream().filter(e -> e.asType().toString().equals("java.util.Map")).collect(Collectors.toList()).size() <= 1;
+
+        return onlyOneMap;
     }
 
     private boolean createEntityManagerAccessInterface(Element element) {
         packageElement = (PackageElement) element.getEnclosingElement();
-        JavaFileObject file = null;
+        JavaFileObject file;
 
-        JavaFileObject fileImpl = null;
         try {
 
             file = filer.createSourceFile(packageElement.getQualifiedName() +".EntityManagerAccess");
