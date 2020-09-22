@@ -93,12 +93,3 @@ If you use SpringFramework and want to deserialize your request parameters in *M
 use *MultiValueMap* in as your controller parameter.
 
 You can see a simple Spring Application using FilterMap [here](https://github.com/gazanas/FilterMapDemo-Spring)
-
-
-#### On Going
-
-- Better Error Handling
-
-- Testing the processor
-
-- Documenting the processor
